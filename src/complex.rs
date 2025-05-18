@@ -3,6 +3,7 @@ use num::Complex;
 use regex::Regex;
 
 // 文字列を Complex<f64> に変換する trait
+#[allow(dead_code)]
 pub trait Parser {
     fn parse(s: &str) -> Result<Complex<f64>>;
 }

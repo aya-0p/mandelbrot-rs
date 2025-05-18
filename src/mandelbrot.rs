@@ -1,7 +1,8 @@
 use anyhow::Result;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
 use num::Complex;
-use std::io::Write;
+use tokio::task::JoinError;
+use std::{io::Write, sync::{Arc, Mutex}};
 
 const LIMIT: u32 = 255;
 
@@ -33,16 +34,44 @@ impl Mandelbrot {
     // }
 
     // 集合の描画を行う
-    pub fn render(&self, pixels: &mut [u8]) {
+    // pub fn render(&self, pixels: &mut [u8]) {
+    //     for row in 0..self.bounds.1 {
+    //         for col in 0..self.bounds.0 {
+    //             let point = pixel_to_point(self.bounds, self.coordinate, (col, row));
+    //             pixels[row * self.bounds.0 + col] = match calc_escape_time(point, LIMIT) {
+    //                 Some(count) => (LIMIT - count) as u8,
+    //                 None => 0,
+    //             };
+    //         }
+    //     }
+    // }
+
+    pub async fn render2(&self, q: Vec<u8>) -> Result<Vec<u8>, JoinError> {
+        let p: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(q));
+        let bounds = self.bounds;
+        let coordinate = self.coordinate;
+        let mut handles = vec![];
         for row in 0..self.bounds.1 {
-            for col in 0..self.bounds.0 {
-                let point = pixel_to_point(self.bounds, self.coordinate, (col, row));
-                pixels[row * self.bounds.0 + col] = match calc_escape_time(point, LIMIT) {
-                    Some(count) => (LIMIT - count) as u8,
-                    None => 0,
-                };
-            }
+            let px = Arc::clone(&p);
+            let handle = tokio::spawn(async move {
+                for col in 0..bounds.0 {
+                    let point = pixel_to_point(bounds, coordinate, (col, row));
+                    let r = match calc_escape_time(point, LIMIT) {
+                        Some(count) => (LIMIT - count) as u8,
+                        None => 0,
+                    };
+                    {
+                        let mut pixels = px.lock().unwrap();
+                        pixels[row * bounds.0 + col] = r;
+                    }
+                }
+            });
+            handles.push(handle);
         }
+        for h in handles {
+            h.await?;
+        }
+        Ok(Arc::clone(&p).lock().unwrap().to_owned())
     }
 
     // png 画像として書き出しを行う。writer は Write trait を実装している型全てを許容する。
