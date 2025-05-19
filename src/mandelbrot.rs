@@ -62,7 +62,7 @@ impl Mandelbrot {
                         None => 0,
                     };
                     let result = ((((r as f64) + (1.0/F_LIMIT)).ln() + 5.541264) / 11.08 * F_LIMIT) as u32;
-                    let at = (row * bounds.0 + col) * 3;
+                    let at = row * bounds.0 + col;
                     {
                         let mut pixels = px.lock().unwrap();
                         pixels[at] = result as u8;
@@ -79,9 +79,13 @@ impl Mandelbrot {
 
     // png 画像として書き出しを行う。writer は Write trait を実装している型全てを許容する。
     pub fn write_image<W: Write>(&self, writer: W, pixels: &[u8]) -> Result<()> {
+        let mut new_pixels = vec![0; self.bounds.0 * self.bounds.1 * 3];
+        for i in 0..(self.bounds.0 * self.bounds.1 - 1) {
+            new_pixels[i * 3] = pixels[i];
+        }
         let encoder = PngEncoder::new(writer);
         encoder.write_image(
-            pixels,
+            &new_pixels,
             self.bounds.0 as u32,
             self.bounds.1 as u32,
             ColorType::Rgb8,
