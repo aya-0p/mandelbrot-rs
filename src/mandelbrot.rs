@@ -1,10 +1,11 @@
 use anyhow::Result;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
-use num::Complex;
+use num::{Complex};
 use tokio::task::JoinError;
 use std::{io::Write, sync::{Arc, Mutex}};
 
-const LIMIT: u32 = 255;
+const LIMIT: u32 = 0xff;
+const F_LIMIT: f64 = 255.0;
 
 pub struct Mandelbrot {
     bounds: (usize, usize),                   // (width, height)
@@ -57,12 +58,14 @@ impl Mandelbrot {
                 for col in 0..bounds.0 {
                     let point = pixel_to_point(bounds, coordinate, (col, row));
                     let r = match calc_escape_time(point, LIMIT) {
-                        Some(count) => (LIMIT - count) as u8,
+                        Some(count) => count,
                         None => 0,
                     };
+                    let result = ((((r as f64) + (1.0/F_LIMIT)).ln() + 5.541264) / 11.08 * F_LIMIT) as u32;
+                    let at = (row * bounds.0 + col) * 3;
                     {
                         let mut pixels = px.lock().unwrap();
-                        pixels[row * bounds.0 + col] = r;
+                        pixels[at] = result as u8;
                     }
                 }
             });
@@ -81,7 +84,7 @@ impl Mandelbrot {
             pixels,
             self.bounds.0 as u32,
             self.bounds.1 as u32,
-            ColorType::L8,
+            ColorType::Rgb8,
         )?;
         Ok(())
     }
@@ -91,7 +94,7 @@ fn calc_escape_time(c: Complex<f64>, limit: u32) -> Option<u32> {
     let mut z = Complex::new(0.0, 0.0);
     for i in 0..limit {
         z = z * z + c;
-        if z.norm_sqr() > 4.0 {
+        if z.norm_sqr() > 8.0 {
             return Some(i);
         }
     }
